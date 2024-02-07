@@ -9,6 +9,8 @@ import pyautogui
 import time
 import matplotlib.pyplot as plt
 
+
+
 plt.figure()
 
 prev_best_time = 0.0
