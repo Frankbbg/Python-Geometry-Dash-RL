@@ -1,58 +1,41 @@
 # Geometry Dash Reinforcement Learning Agent
 
-This project implements a Reinforcement Learning (RL) agent designed to play the game Geometry Dash. The agent uses a Convolutional Neural Network (CNN) to process visual inputs and determine the best actions to take within the game environment.
+This project implements a Reinforcement Learning (RL) agent designed to play the game Geometry Dash. The agent uses an Actor-Critic Model (A2C) to determine the best actions to take within the game environment. Simple visual inputs are taken to determine whether the avatar is onscreen or offscreen. This is the basis for dead and alive, which drives the reward function.
 
 ## Project Structure
 
-- `bot.py`: The main script containing the RL loop where the agent learns to interact with the game.
-- `image_processing.py`: Contains image preprocessing functionality and screenshot capturing from the game.
-- `agent.py`: Defines the DQN agent and related functionality, such as the model architecture and the replay buffer.
-- `requirements.txt`: Lists all Python libraries needed to run the agent.
+Here's a brief explanation of the key files and directories in this project:
+
+- [`agent.py`](command:_github.copilot.openRelativePath?%5B%22agent.py%22%5D "agent.py"): This file contains the implementation of the RL agent.
+- [`ai.py`](command:_github.copilot.openRelativePath?%5B%22ai.py%22%5D "ai.py"): This is the main script that runs the RL agent.
+- [`assets/`](command:_github.copilot.openRelativePath?%5B%22assets%2F%22%5D "assets/"): This directory contains any necessary assets for the game or the RL agent.
+- [`checkpoints/`](command:_github.copilot.openRelativePath?%5B%22checkpoints%2F%22%5D "checkpoints/"): This directory is where the trained models of the RL agent are saved. The current model is `geometry_dash_model.pt`.
+- [`frames/`](command:_github.copilot.openRelativePath?%5B%22frames%2F%22%5D "frames/"): This directory is used to store frames from the game for debugging or visualization purposes.
+- [`gdrlEnv/`](command:_github.copilot.openRelativePath?%5B%22gdrlEnv%2F%22%5D "gdrlEnv/"): This directory contains the implementation of the Geometry Dash environment that the RL agent interacts with.
+- [`screen_capture.py`](command:_github.copilot.openRelativePath?%5B%22screen_capture.py%22%5D "screen_capture.py"): This script is used to capture screenshots from the game.
+- [`requirements.txt`](command:_github.copilot.openRelativePath?%5B%22requirements.txt%22%5D "requirements.txt"): This file lists the Python dependencies required for this project.
 
 ## Setup
 
-To get started, clone this repository and install the required Python dependencies:
+1. Clone this repository.
+2. Install the necessary Python dependencies using pip:
 
-```bash
-git clone https://github.com/your-username/geometry-dash-rl-agent.git
-cd geometry-dash-rl-agent
+```sh
 pip install -r requirements.txt
 ```
 
-## Running the Agent
-
-To start training the agent, simply run:
-
-```bash
-python bot.py
+## Running the RL Agent
+to run the RL agent, simply execute the `ai.py` script:
+```sh
+python ai.py
 ```
 
-The script will automatically begin capturing frames from the game, preprocess them, and feed them to the agent to make decisions and learn through reinforcement learning.
-
-## Image Processing
-
-The `image_processing.py` script preprocesses the game frames for the agent to consume. It handles grayscale conversion, resizing to lower dimensions, and normalization of pixel values.
-
-## DQN Agent
-
-The `agent.py` script defines the DQN agent, including the neural network model, action selection, and learning mechanisms. It uses experience replay and a target network based on the DQN algorithm to stabilize training and improve learning efficiency.
-
-## Contribution
-
-Contributions to this project are welcome. To contribute:
+## Contributing
+Contributions to this project are welcome. Please feel free to open an issue. 
+To contribute:
 
 1. Fork the repository.
 2. Create a new branch for your feature (`git checkout -b feature/AmazingFeature`).
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
 4. Push to the branch (`git push origin feature/AmazingFeature`).
 5. Open a pull request.
-
-## License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
-## Contact
-
-Your Name - [@your_twitter](https://twitter.com/your_twitter) - email@example.com
-
-Project Link: [https://github.com/your-username/geometry-dash-rl-agent](https://github.com/your-username/geometry-dash-rl-agent)
