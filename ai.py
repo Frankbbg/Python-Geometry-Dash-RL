@@ -2,14 +2,12 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
-from agent import GeometryDashCNN, Actor, Critic, ReplayBuffer
+from agent import Actor, Critic, PrioritizedReplayBuffer
 from screen_capture import capture_screen, preprocess_frame, find_avatar
 import numpy as np
 import pyautogui
 import time
 import matplotlib.pyplot as plt
-
-
 
 plt.figure()
 
@@ -107,15 +105,17 @@ def compute_returns(rewards, gamma=0.99):
         returns.insert(0, R)
     return returns
 
-def update_policy(actor_model, critic_model, actor_optimizer, critic_optimizer, states, actions, returns):
+def update_policy(actor_model, critic_model, actor_optimizer, critic_optimizer, states, actions, returns, weights):
     actor_optimizer.zero_grad()
     critic_optimizer.zero_grad()
-    actor_loss = 0
-    critic_loss = 0
-    for state, action, R in zip(states, actions, returns):
+    actor_loss = None
+    critic_loss = None
+    td_errors = []
+    for state, action, R, weight in zip(states, actions, returns, weights):
         state = torch.tensor(state, dtype=torch.float)
         action = torch.tensor(action, dtype=torch.long)
         R = torch.tensor(R, dtype=torch.float)
+        weight = torch.tensor(weight, dtype=torch.float)
 
         # check if the state is 3D or 4D
         if len(state.shape) == 3:
@@ -127,26 +127,39 @@ def update_policy(actor_model, critic_model, actor_optimizer, critic_optimizer, 
             log_probs = F.log_softmax(logits, dim=-1)
 
         # Select the log probability for the taken action
+        print('\n\n' + action + '\n\n')
         log_prob_action = log_probs[0, action]
 
         # Calculate the actor loss
-        actor_loss -= log_prob_action * R  # Negative because we want to do gradient ascent
+        actor_loss -= weight * log_prob_action * R  # Negative because we want to do gradient ascent
 
         # Forward pass to get value estimate from critic
         value_estimate = critic_model(state.unsqueeze(0) if len(state.shape) == 3 else state)
 
         # Calculate the critic loss (MSE between the return and the value estimate)
-        critic_loss += F.mse_loss(value_estimate, R.unsqueeze(0).unsqueeze(1))
+        critic_loss += weight * F.mse_loss(value_estimate, R.unsqueeze(0).unsqueeze(1))
+
+        # Compute TD error
+        td_error = R - value_estimate.detach()
+        td_errors.append(td_error)
 
     # Backward pass and optimization step for actor
-    actor_loss.backward()
-    actor_optimizer.step()
+    if actor_loss is not None:
+        actor_loss.backward()
+        actor_optimizer.step()
 
     # Backward pass and optimization step for critic
-    critic_loss.backward()
-    critic_optimizer.step()
+    if critic_loss is not None:
+        critic_loss.backward()
+        critic_optimizer.step()
+        
+    if len(td_errors) > 0:
+        td_errors_stacked = torch.stack(td_errors)
+    else:
+        # Handle the empty case by creating a default tensor or skipping operations that require td_errors
+        td_errors_stacked = torch.tensor([])
 
-    return actor_loss.item(), critic_loss.item()
+    return actor_loss.item() if actor_loss is not None else 0, critic_loss.item() if critic_loss is not None else 0, td_errors_stacked
 
 def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
     optimizer_actor = torch.optim.Adam(actor_model.parameters(), lr=0.01)
@@ -161,7 +174,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
     start_global_time = time.time()
     
     # set up the reply buffer
-    replay_buffer = ReplayBuffer(capacity=1000)
+    replay_buffer = PrioritizedReplayBuffer(capacity=1000)
     
     for episode in range(episodes):
         # print("Episode:", episode, end="\n\r")
@@ -219,9 +232,12 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         # if the replay buffer is full, sample from it and train the model
         batch_size = 32  # Define the batch size
         if len(replay_buffer) > batch_size:
-            experiences = replay_buffer.sample(batch_size)
+            experiences, indices, weights = replay_buffer.sample(batch_size)
             returns = compute_returns([exp[2] for exp in experiences], gamma)
-            actor_loss, critic_loss = update_policy(actor_model, critic_model, optimizer_actor, optimizer_critic, [exp[0] for exp in experiences], [exp[1] for exp in experiences], returns)
+            actor_loss, critic_loss, td_errors = update_policy(actor_model, critic_model, optimizer_actor, optimizer_critic, [exp[0] for exp in experiences], [exp[1] for exp in experiences], returns, weights)
+
+            # Update priorities with TD errors
+            replay_buffer.update_priorities(indices, td_errors.numpy())
 
             actor_losses.append(actor_loss)
             critic_losses.append(critic_loss)

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import random
 import numpy as np
+from collections import deque
 
 class GeometryDashCNN(nn.Module):
     def __init__(self):
@@ -54,40 +55,51 @@ class Critic(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
-    
-class ReplayBuffer:
-    def __init__(self, capacity):
+
+class PrioritizedReplayBuffer:
+    def __init__(self, capacity, prob_alpha=0.6, beta_start=0.4, beta_frames=100000):
+        self.prob_alpha = prob_alpha
         self.capacity = capacity
-        self.buffer = []
-        self.position = 0
+        self.buffer = deque(maxlen=capacity)
+        self.priorities = np.zeros((capacity,), dtype=np.float32)
+        self.pos = 0
+        self.beta_start = beta_start
+        self.beta_frames = beta_frames
+        self.frame = 1
 
     def push(self, state, action, reward, next_state, done):
-        '''
-        Add a new experience to the replay buffer.
-        This works because:
-        - state, action, reward, next_state, and done are all numpy arrays
-        - the buffer is a list of tuples, where each tuple contains the 5 elements above
-        '''
-        if len(self.buffer) < self.capacity: # If the buffer is not full, add a new tuple
-            self.buffer.append(None)
-            
-        # Add the new experience to the buffer by replacing the oldest experience
-        self.buffer[self.position] = (state, action, reward, next_state, done)
-        
-        # Update the position to the next index
-        self.position = (self.position + 1) % self.capacity
+        max_prio = self.priorities.max() if self.buffer else 1.0
+        if len(self.buffer) < self.capacity:
+            self.buffer.append((state, action, reward, next_state, done))
+        else:
+            self.buffer[self.pos] = (state, action, reward, next_state, done)
+        self.priorities[self.pos] = max_prio
+        self.pos = (self.pos + 1) % self.capacity
 
     def sample(self, batch_size):
-        '''
-        Randomly sample a batch of experiences from the replay buffer.
-        This works because:
-        - random.sample returns a list of batch_size unique elements from the buffer
-        - zip(*batch) transposes the batch list of tuples into a tuple of lists
-        - map(np.stack, ...) converts each list of tuples into a list of numpy arrays
-        '''
-        batch = random.sample(self.buffer, batch_size) # Randomly sample a batch of experiences
-        state, action, reward, next_state, done = map(np.stack, zip(*batch)) # Transpose the batch of experiences
-        return state, action, reward, next_state, done
+        if len(self.buffer) == self.capacity:
+            prios = self.priorities
+        else:
+            prios = self.priorities[:self.pos]
+
+        probs = prios ** self.prob_alpha
+        probs /= probs.sum()
+
+        indices = np.random.choice(len(self.buffer), batch_size, p=probs)
+        samples = [self.buffer[idx] for idx in indices]
+
+        beta = self.beta_start + (1 - self.beta_start) * self.frame / self.beta_frames
+        self.frame += 1
+
+        # Compute importance sampling weights
+        weights = (len(self.buffer) * probs[indices]) ** -beta
+        weights /= weights.max()
+
+        return map(np.stack, zip(*samples)), indices, np.array(weights, dtype=np.float32)
+
+    def update_priorities(self, indices, priorities):
+        for idx, priority in zip(indices, priorities):
+            self.priorities[idx] = priority
 
     def __len__(self):
         return len(self.buffer)
