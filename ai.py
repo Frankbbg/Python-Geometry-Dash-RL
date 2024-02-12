@@ -11,8 +11,6 @@ import matplotlib.pyplot as plt
 
 plt.figure()
 
-prev_best_time = 0.0
-
 def get_initial_state():
     initial_frame = capture_screen()  # Capture the initial game screen
     initial_state = preprocess_frame(initial_frame)  # Preprocess the frame
@@ -45,7 +43,6 @@ def choose_action(state, actor_model, exploration_rate=0.1):
 #     return 1
 
 def play_step(action, reward, elapsed_time, best_time):
-    global prev_best_time
     # Perform the action
     if action == 1:  # Assuming 1 is 'jump'
         # print('Jumped')
@@ -54,7 +51,7 @@ def play_step(action, reward, elapsed_time, best_time):
         pyautogui.click(button='left')
         
     # Wait a bit for the action to take effect in the game
-    time.sleep(0.1)
+    time.sleep(0.05)
     
     next_reward = reward
     
@@ -73,24 +70,12 @@ def play_step(action, reward, elapsed_time, best_time):
     
     # Define the reward or penalty
     if dead:
-        # print("Before reward:", next_reward, end="\r")
-        # dynamically adjust the reward based on the current reward
-        next_reward -= 0.5 # Penalize for dying
+        next_reward -= (0.5 + (elapsed_time / 200))# Dynamically penalize the agent for dying
         # print("Died")
         # print("Reward:", next_reward, end="\n\r")
     else:
-        next_reward = elapsed_time * 0.001
         # Small reward for surviving this step
-        # print("Survived")
-        # print("Reward:", next_reward, end="\n\r")
-        
-    # subtract the reward a tiny amount for taking too long to beat the level
-    
-        
-    if prev_best_time != best_time: # we know that there is a new best
-        next_reward += 2.0
-        
-    prev_best_time = best_time
+        next_reward = elapsed_time * 0.1  # Reward the agent for surviving
     
     return next_state_expanded, next_reward, dead
 
@@ -170,6 +155,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
     reward_cache = []
     actor_losses = []
     critic_losses = []
+    prev_times = []
     
     start_global_time = time.time()
     
@@ -201,11 +187,13 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         replay_buffer.push(state, action, reward, next_state, dead)
         
         while not dead:
-            if time.time() - start_time > best_time:
+            total_time = time.time() - start_time  # Store the total time before resetting
+            if total_time > best_time:
                 best_time = time.time() - start_time
+                next_reward += 2.0
             
             action = choose_action(state, actor_model)
-            next_state, next_reward, dead = play_step(action, reward, time.time() - start_time, best_time)
+            next_state, next_reward, dead = play_step(action, reward, total_time, best_time)
             next_reward -= (time.time() - start_global_time) * 0.01
             # print((time.time() - start_global_time) * 0.01)
             # print(dead)
@@ -219,15 +207,14 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             replay_buffer.push(state, action, reward, next_state, dead)
             
             print("Reward:", reward, "Dead:", dead, "Episode: ", episode, end="\r")
+
+        start_time = time.time()  # reset the run's time at the player's death
         
-        reward_cache.append(reward)        
-        
-        if len(reward_cache) >= 5:
-            # print('Reward Cache Full')
-            if len(set(reward_cache)) == 1:
-                # print('Reward Cache All Same')
-                reward -= 2
-            reward_cache.clear()
+        if len(prev_times) != 3:
+            prev_times.append(total_time)
+        else:
+            prev_times.pop(0)      # remove the first element
+            prev_times.append(total_time)
             
         # if the replay buffer is full, sample from it and train the model
         batch_size = 32  # Define the batch size
@@ -241,11 +228,20 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
 
             actor_losses.append(actor_loss)
             critic_losses.append(critic_loss)
+
+        if episode % 5 == 0:
+            for i in range(len(prev_times) - 1):  # iterate over the list, but stop one short to avoid index error
+                difference = abs(prev_times[i] - prev_times[i + 1])  # calculate the difference between current and next time
+                if 0.02 <= difference <= 0.04:  # if the difference is between 0.02 and 0.04
+                    print("Distances are between 0.02 and 0.04! Penalizing...")
+                    next_reward -= 4  # penalize the agent
+                    break  # exit the loop early
         
         if episode % 10 == 0:
             # Print a highly formatted list of the current reward and penalty
             print(f"Episode: {episode}, Total reward: {sum(rewards)}, Total penalty: {len(rewards) - sum(rewards)}", end="\n\r")
-
+            next_reward = (next_reward / episode)  # decrease the reward over time
+        
     return actor_losses, critic_losses
 
 def run_inference(actor_model):
@@ -269,6 +265,7 @@ def run_inference(actor_model):
                 dead = False
                 reward = 0.0
                 best_time = 0.0
+                start_time = time.time()  # reset the run's time at the player's death
                 
     except KeyboardInterrupt:
         print("Inference stopped by user.")
