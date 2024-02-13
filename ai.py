@@ -77,13 +77,13 @@ def play_step(action, reward, elapsed_time):
         # dynamically adjust the reward based on the current reward
         print("Elapsed time:", elapsed_time, "Best Time:", best_time)
         print("Died! Penalizing...")
-        next_reward -= (0.5 + (elapsed_time / 400)) # Dynamically penalize the agent for dying
+        next_reward -= (0.2 + (elapsed_time / 400)) # Dynamically penalize the agent for dying
         # print("Died")
         # print("Reward:", next_reward, end="\n\r")
     else:
         print("survived! Rewarding...")
         print("Elapsed time:", elapsed_time, "Best Time:", best_time)
-        next_reward += elapsed_time * 00.1
+        next_reward += 1.5 * (elapsed_time * best_time / 1000) # Dynamically reward the agent for surviving (the longer it takes, the more reward it gets
         # Small reward for surviving this step
         # print("Survived")
         # print("Reward:", next_reward, end="\n\r")
@@ -92,7 +92,8 @@ def play_step(action, reward, elapsed_time):
         
     if elapsed_time >= best_time: # we know that there is a new best
         best_time = elapsed_time
-        next_reward += 2.0
+        print("New best time:", best_time)
+        next_reward += 5.0
     
     return next_state_expanded, next_reward, dead
 
@@ -225,9 +226,11 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         start_time = time.time()
         
         if len(prev_times) != 3:
+            print("Adding time to prev_times", current_time)
             prev_times.append(current_time)
         else:
             prev_times.pop(0)      # remove the first element
+            print("Adding 1st time to prev_times", current_time)
             prev_times.append(current_time)
             
         # if the replay buffer is full, sample from it and train the model
@@ -246,9 +249,10 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         if episode % 5 == 0:
             for i in range(len(prev_times) - 1):  # iterate over the list, but stop one short to avoid index error
                 difference = abs(prev_times[i] - prev_times[i + 1])  # calculate the difference between current and next time
+                print("Difference:", difference)
                 if 0.02 <= difference <= 0.04:  # if the difference is between 0.02 and 0.04
-                    print("Distances are between 0.02 and 0.04! Penalizing...")
                     next_reward -= 4  # penalize the agent
+                    print("Distances are between 0.02 and 0.04! New reward amt: ", next_reward)
                     break  # exit the loop early
         
         if episode % 10 == 0:
@@ -257,6 +261,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             next_reward = (next_reward / (episode + 1))
 
     return actor_losses, critic_losses
+
 
 def run_inference(actor_model):
     
