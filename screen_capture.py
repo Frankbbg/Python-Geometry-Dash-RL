@@ -104,11 +104,11 @@ def find_avatar(frame, saveImg=False, *, fileName=None):
         exit()
     
     # Define a threshold for detection
-    threshold = 0.34  # You may need to adjust this based on testing
+    threshold = 0.3248961  # You may need to adjust this based on testing
     # print(np.max(res))
     
     # If the max correlation value is greater than the threshold, we found the avatar
-    if np.max(res) > threshold:
+    if np.max(res) >= threshold:
         return True
     else:
         return False

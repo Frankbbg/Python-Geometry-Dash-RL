@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 
 plt.figure()
 
+best_time = 0.0
+
 def get_initial_state():
     initial_frame = capture_screen()  # Capture the initial game screen
     initial_state = preprocess_frame(initial_frame)  # Preprocess the frame
@@ -42,7 +44,8 @@ def choose_action(state, actor_model, exploration_rate=0.1):
 #     # For now, let's return a placeholder value
 #     return 1
 
-def play_step(action, reward, elapsed_time, best_time):
+def play_step(action, reward, elapsed_time):
+    global best_time
     # Perform the action
     if action == 1:  # Assuming 1 is 'jump'
         # print('Jumped')
@@ -70,12 +73,26 @@ def play_step(action, reward, elapsed_time, best_time):
     
     # Define the reward or penalty
     if dead:
-        next_reward -= (0.5 + (elapsed_time / 200))# Dynamically penalize the agent for dying
+        # print("Before reward:", next_reward, end="\r")
+        # dynamically adjust the reward based on the current reward
+        print("Elapsed time:", elapsed_time, "Best Time:", best_time)
+        print("Died! Penalizing...")
+        next_reward -= (0.5 + (elapsed_time / 200)) # Dynamically penalize the agent for dying
         # print("Died")
         # print("Reward:", next_reward, end="\n\r")
     else:
+        print("survived! Rewarding...")
+        print("Elapsed time:", elapsed_time, "Best Time:", best_time)
+        next_reward += elapsed_time * 000.1
         # Small reward for surviving this step
-        next_reward = elapsed_time * 0.1  # Reward the agent for surviving
+        # print("Survived")
+        # print("Reward:", next_reward, end="\n\r")
+        
+    # subtract the reward a tiny amount for taking too long to beat the level
+        
+    if elapsed_time >= best_time: # we know that there is a new best
+        best_time = elapsed_time
+        next_reward += 2.0
     
     return next_state_expanded, next_reward, dead
 
@@ -150,13 +167,11 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
     optimizer_actor = torch.optim.Adam(actor_model.parameters(), lr=0.01)
     optimizer_critic = torch.optim.Adam(critic_model.parameters(), lr=0.01)
     reward = 0.0
-    best_time = 0.0
     epsilon = 10
-    reward_cache = []
     actor_losses = []
     critic_losses = []
     prev_times = []
-    
+
     start_global_time = time.time()
     
     # set up the reply buffer
@@ -176,25 +191,24 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         
         # Primer so that no error is thrown when the first action is taken (might make this more elegant later)
         action = choose_action(state, actor_model, next_epsilon)
-        next_state, next_reward, dead = play_step(action, reward, 0, best_time)
+        next_state, next_reward, dead = play_step(action, reward, 0.0)
         reward = next_reward
         states.append(state)
         actions.append(action)
         rewards.append(reward)
         state = next_state
+        current_time = 0.0
         
         # store the experience in the replay buffer
         replay_buffer.push(state, action, reward, next_state, dead)
         
         while not dead:
-            total_time = time.time() - start_time  # Store the total time before resetting
-            if total_time > best_time:
-                best_time = time.time() - start_time
-                next_reward += 2.0
+            current_time = time.time() - start_time
+            print ("current_time", current_time)
             
             action = choose_action(state, actor_model)
-            next_state, next_reward, dead = play_step(action, reward, total_time, best_time)
-            next_reward -= (time.time() - start_global_time) * 0.01
+            next_state, next_reward, dead = play_step(action, reward, current_time)
+            #next_reward -= (time.time() - start_global_time) * 0.001
             # print((time.time() - start_global_time) * 0.01)
             # print(dead)
             reward = next_reward
@@ -206,15 +220,15 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             # store the experience in the replay buffer
             replay_buffer.push(state, action, reward, next_state, dead)
             
-            print("Reward:", reward, "Dead:", dead, "Episode: ", episode, end="\r")
+            print("Reward:", reward, "Dead:", dead, "Episode: ", episode)
 
-        start_time = time.time()  # reset the run's time at the player's death
+        start_time = time.time()
         
         if len(prev_times) != 3:
-            prev_times.append(total_time)
+            prev_times.append(current_time)
         else:
             prev_times.pop(0)      # remove the first element
-            prev_times.append(total_time)
+            prev_times.append(current_time)
             
         # if the replay buffer is full, sample from it and train the model
         batch_size = 32  # Define the batch size
@@ -239,9 +253,9 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         
         if episode % 10 == 0:
             # Print a highly formatted list of the current reward and penalty
-            print(f"Episode: {episode}, Total reward: {sum(rewards)}, Total penalty: {len(rewards) - sum(rewards)}", end="\n\r")
-            next_reward = (next_reward / episode)  # decrease the reward over time
-        
+            print(f"Episode: {episode}, Total reward: {sum(rewards)}, Total penalty: {len(rewards) - sum(rewards)}")
+            next_reward = (next_reward / episode)
+
     return actor_losses, critic_losses
 
 def run_inference(actor_model):
@@ -249,23 +263,21 @@ def run_inference(actor_model):
     state = get_initial_state()
     dead = False
     reward = 0.0
-    best_time = 0.0
 
     try:
         while True:
             start_time = time.time()
             action = choose_action(state, actor_model)
-            next_state, next_reward, dead = play_step(action, reward, time.time() - start_time, best_time)
+            next_state, next_reward, dead = play_step(action, reward, time.time() - start_time)
             reward = next_reward
             state = next_state
-            print("Reward:", reward, "Dead:", dead, end="\r")
+            print("Reward:", reward, "Dead:", dead)
 
             if dead:
                 state = get_initial_state()
                 dead = False
                 reward = 0.0
-                best_time = 0.0
-                start_time = time.time()  # reset the run's time at the player's death
+                start_time = time.time()
                 
     except KeyboardInterrupt:
         print("Inference stopped by user.")
@@ -324,3 +336,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
