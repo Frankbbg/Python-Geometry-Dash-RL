@@ -80,7 +80,7 @@ def play_step(action, reward, elapsed_time):
         print(f"Died at {elapsed_time} Penalized: {penalty} points!")
     else:
         #Rationale: the further it progresses in the game, the larger the reward.
-        award = 0.2 + (elapsed_time / 200) + (best_time / 1000) # Dynamically reward the agent for surviving.
+        award = 0.2 * (elapsed_time / 200) + (best_time / 1000) # Dynamically reward the agent for surviving.
         next_reward += award
         print(f"Survived for:, {elapsed_time} Rewarded: {award}")
         # Small reward for surviving this step
@@ -154,15 +154,15 @@ def update_policy(actor_model, critic_model, actor_optimizer, critic_optimizer, 
 
     return actor_loss.item() if actor_loss is not None else 0, critic_loss.item() if critic_loss is not None else 0, td_errors_stacked
 
-def is_avg(current_time):
+def above_avg(current_time):
     global avg_time
-    if current_time >= avg_time:
+    if current_time > avg_time:
         return True
     return False
 
-def is_new_best(current_time):
+def new_best(current_time):
     global best_time
-    if current_time >= best_time:
+    if current_time > best_time:
         best_time = current_time
         return True
     return False
@@ -203,6 +203,9 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         rewards.append(reward)
         state = next_state
         current_time = 0.0
+
+        if new_best(current_time): # we know that there is a new best
+                replay_buffer.push(state, action, reward, next_state, dead)
         
         while not dead:
             current_time = time.time() - start_time
@@ -220,17 +223,21 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             rewards.append(reward)
             state = next_state
 
-        if is_new_best: # we know that there is a new best
-            replay_buffer.push(state, action, reward, next_state, dead)
+            if new_best(current_time): # we know that there is a new best
+                replay_buffer.push(state, action, reward, next_state, dead)
+
+        if new_best(current_time):
             print("New best time:", best_time)
             next_reward += 5.0
         else:
             next_reward -= 2.0
 
-        if is_avg:
+        if above_avg(current_time):
+            print(f"New time: {current_time} is above the average: {avg_time}")
             next_reward += 2.0
         else:
-            next_reward -= 5.0
+            print(f"New time: {current_time} is below average penalizing....")
+            next_reward -= 3.0
             
             print("Reward:", reward, "Dead:", dead, "Episode: ", episode)
 
