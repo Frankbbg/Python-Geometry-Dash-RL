@@ -80,7 +80,7 @@ def play_step(action, reward, elapsed_time):
         print(f"Died at {elapsed_time} Penalized: {penalty} points!")
     else:
         #Rationale: the further it progresses in the game, the larger the reward.
-        award = 0.2 * (elapsed_time / 200) + (best_time / 1000) # Dynamically reward the agent for surviving.
+        award = 0.2 * elapsed_time + (best_time / 1000) # Dynamically reward the agent for surviving.
         next_reward += award
         print(f"Survived for:, {elapsed_time} Rewarded: {award}")
         # Small reward for surviving this step
@@ -237,7 +237,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             next_reward += 2.0
         else:
             print(f"New time: {current_time} is below average penalizing....")
-            next_reward -= 3.0
+            next_reward -= 2.0
             
             print("Reward:", reward, "Dead:", dead, "Episode: ", episode)
 
@@ -248,7 +248,6 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         else:
             prev_times.pop(0)      # remove the first element
             avg_time = sum(prev_times) / len(prev_times)
-            print("Adding 1st time to prev_times", current_time)
             prev_times.append(current_time)
             
         # if the replay buffer is full, sample from it and train the model
@@ -267,10 +266,9 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         if episode % 5 == 0:
             for i in range(len(prev_times) - 1):
                 difference = abs(prev_times[i] - prev_times[i + 1])
-                print(f"Difference: {difference}")
                 if 0.5 <= difference <= 2:
                     next_reward -= 5.0
-                    print(f"Distances are between 0.02 and 0.04! New reward amt: {next_reward}")
+                    print(f"Distances are between 0.5 and 2 New reward amt: {next_reward}")
                     break
         
         if episode % 10 == 0:
