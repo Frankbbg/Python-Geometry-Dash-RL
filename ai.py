@@ -254,7 +254,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         if episode % 10 == 0:
             # Print a highly formatted list of the current reward and penalty
             print(f"Episode: {episode}, Total reward: {sum(rewards)}, Total penalty: {len(rewards) - sum(rewards)}")
-            next_reward = (next_reward / episode)
+            next_reward = (next_reward / episode + 1)
 
     return actor_losses, critic_losses
 
