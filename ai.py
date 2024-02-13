@@ -77,13 +77,13 @@ def play_step(action, reward, elapsed_time):
         # dynamically adjust the reward based on the current reward
         print("Elapsed time:", elapsed_time, "Best Time:", best_time)
         print("Died! Penalizing...")
-        next_reward -= (0.5 + (elapsed_time / 200)) # Dynamically penalize the agent for dying
+        next_reward -= (0.5 + (elapsed_time / 400)) # Dynamically penalize the agent for dying
         # print("Died")
         # print("Reward:", next_reward, end="\n\r")
     else:
         print("survived! Rewarding...")
         print("Elapsed time:", elapsed_time, "Best Time:", best_time)
-        next_reward += elapsed_time * 000.1
+        next_reward += elapsed_time * 00.1
         # Small reward for surviving this step
         # print("Survived")
         # print("Reward:", next_reward, end="\n\r")
