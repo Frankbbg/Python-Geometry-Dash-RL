@@ -203,6 +203,9 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         rewards.append(reward)
         state = next_state
         current_time = 0.0
+
+        if new_best(current_time): # we know that there is a new best
+                replay_buffer.push(state, action, reward, next_state, dead)
         
         while not dead:
             current_time = time.time() - start_time
@@ -220,14 +223,16 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             rewards.append(reward)
             state = next_state
 
-        if new_best: # we know that there is a new best
-            replay_buffer.push(state, action, reward, next_state, dead)
+            if new_best(current_time): # we know that there is a new best
+                replay_buffer.push(state, action, reward, next_state, dead)
+
+        if new_best(current_time):
             print("New best time:", best_time)
             next_reward += 5.0
         else:
             next_reward -= 2.0
 
-        if above_avg:
+        if above_avg(current_time):
             print(f"New time: {current_time} is above the average: {avg_time}")
             next_reward += 2.0
         else:
