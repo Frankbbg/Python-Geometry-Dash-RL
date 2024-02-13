@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 
 plt.figure()
 
+avg_time = 0.0
 best_time = 0.0
 
 def get_initial_state():
@@ -73,27 +74,16 @@ def play_step(action, reward, elapsed_time):
     
     # Define the reward or penalty
     if dead:
-        # print("Before reward:", next_reward, end="\r")
-        # dynamically adjust the reward based on the current reward
-        print("Elapsed time:", elapsed_time, "Best Time:", best_time)
-        print("Died! Penalizing...")
-        next_reward -= (0.2 + (elapsed_time / 400)) # Dynamically penalize the agent for dying
-        # print("Died")
-        # print("Reward:", next_reward, end="\n\r")
+        # dynamically adjust the reward based on the current reward and the time it took to die
+        penalty = -0.5 + (elapsed_time / 200) + (best_time / 1000) # Dynamically penalizing for dying
+        next_reward += penalty
+        print(f"Died at {elapsed_time} Penalized: {penalty} points!")
     else:
-        print("survived! Rewarding...")
-        print("Elapsed time:", elapsed_time, "Best Time:", best_time)
-        next_reward += 1.5 * (elapsed_time * best_time / 1000) # Dynamically reward the agent for surviving (the longer it takes, the more reward it gets
+        #Rationale: the further it progresses in the game, the larger the reward.
+        award = 0.2 + (elapsed_time / 200) + (best_time / 1000) # Dynamically reward the agent for surviving.
+        next_reward += award
+        print(f"Survived for:, {elapsed_time} Rewarded: {award}")
         # Small reward for surviving this step
-        # print("Survived")
-        # print("Reward:", next_reward, end="\n\r")
-        
-    # subtract the reward a tiny amount for taking too long to beat the level
-        
-    if elapsed_time >= best_time: # we know that there is a new best
-        best_time = elapsed_time
-        print("New best time:", best_time)
-        next_reward += 5.0
     
     return next_state_expanded, next_reward, dead
 
@@ -164,7 +154,21 @@ def update_policy(actor_model, critic_model, actor_optimizer, critic_optimizer, 
 
     return actor_loss.item() if actor_loss is not None else 0, critic_loss.item() if critic_loss is not None else 0, td_errors_stacked
 
+def is_avg(current_time):
+    global avg_time
+    if current_time >= avg_time:
+        return True
+    return False
+
+def is_new_best(current_time):
+    global best_time
+    if current_time >= best_time:
+        best_time = current_time
+        return True
+    return False
+
 def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
+    global avg_time
     optimizer_actor = torch.optim.Adam(actor_model.parameters(), lr=0.01)
     optimizer_critic = torch.optim.Adam(critic_model.parameters(), lr=0.01)
     reward = 0.0
@@ -200,16 +204,14 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         state = next_state
         current_time = 0.0
         
-        # store the experience in the replay buffer
-        replay_buffer.push(state, action, reward, next_state, dead)
-        
         while not dead:
             current_time = time.time() - start_time
             print ("current_time", current_time)
             
             action = choose_action(state, actor_model)
             next_state, next_reward, dead = play_step(action, reward, current_time)
-            #next_reward -= (time.time() - start_global_time) * 0.001
+            # subtract the reward a tiny amount for taking too long to beat the level
+            next_reward -= (time.time() - start_global_time) * 0.001
             # print((time.time() - start_global_time) * 0.01)
             # print(dead)
             reward = next_reward
@@ -217,19 +219,28 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             actions.append(action)
             rewards.append(reward)
             state = next_state
-            
-            # store the experience in the replay buffer
+
+        if is_new_best: # we know that there is a new best
             replay_buffer.push(state, action, reward, next_state, dead)
+            print("New best time:", best_time)
+            next_reward += 5.0
+        else:
+            next_reward -= 2.0
+
+        if is_avg:
+            next_reward += 2.0
+        else:
+            next_reward -= 5.0
             
             print("Reward:", reward, "Dead:", dead, "Episode: ", episode)
 
         start_time = time.time()
         
-        if len(prev_times) != 3:
-            print("Adding time to prev_times", current_time)
+        if len(prev_times) != 4:
             prev_times.append(current_time)
         else:
             prev_times.pop(0)      # remove the first element
+            avg_time = sum(prev_times) / len(prev_times)
             print("Adding 1st time to prev_times", current_time)
             prev_times.append(current_time)
             
@@ -247,13 +258,13 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             critic_losses.append(critic_loss)
 
         if episode % 5 == 0:
-            for i in range(len(prev_times) - 1):  # iterate over the list, but stop one short to avoid index error
-                difference = abs(prev_times[i] - prev_times[i + 1])  # calculate the difference between current and next time
-                print("Difference:", difference)
-                if 0.02 <= difference <= 0.04:  # if the difference is between 0.02 and 0.04
-                    next_reward -= 4  # penalize the agent
-                    print("Distances are between 0.02 and 0.04! New reward amt: ", next_reward)
-                    break  # exit the loop early
+            for i in range(len(prev_times) - 1):
+                difference = abs(prev_times[i] - prev_times[i + 1])
+                print(f"Difference: {difference}")
+                if 0.5 <= difference <= 2:
+                    next_reward -= 5.0
+                    print(f"Distances are between 0.02 and 0.04! New reward amt: {next_reward}")
+                    break
         
         if episode % 10 == 0:
             # Print a highly formatted list of the current reward and penalty
