@@ -77,6 +77,7 @@ def play_step(action, reward, elapsed_time):
         # dynamically adjust the reward based on the current reward and the time it took to die
         penalty = -0.5 + (elapsed_time / 200) + (best_time / 1000) # Dynamically penalizing for dying
         next_reward += penalty
+        print("best time:", best_time)
         print(f"Died at {elapsed_time} Penalized: {penalty} points!")
     else:
         #Rationale: the further it progresses in the game, the larger the reward.
@@ -180,7 +181,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
     start_global_time = time.time()
     
     # set up the reply buffer
-    replay_buffer = PrioritizedReplayBuffer(capacity=1000)
+    replay_buffer = PrioritizedReplayBuffer(capacity=10000)
     
     for episode in range(episodes):
         # print("Episode:", episode, end="\n\r")
@@ -205,7 +206,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         current_time = 0.0
 
         if new_best(current_time): # we know that there is a new best
-                replay_buffer.push(state, action, reward, next_state, dead)
+            replay_buffer.push(state, action, reward, next_state, dead)
         
         while not dead:
             current_time = time.time() - start_time
@@ -226,19 +227,13 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             if new_best(current_time): # we know that there is a new best
                 replay_buffer.push(state, action, reward, next_state, dead)
 
-        if new_best(current_time):
-            print("New best time:", best_time)
-            next_reward += 5.0
-        else:
-            next_reward -= 2.0
+            if above_avg(current_time):
+                next_reward += 3.0
+                print("Above average time:", current_time, "New amt:", next_reward)
+            else:
+                next_reward -= 1.0
+                print("Below average time:", current_time, "New amt:", next_reward)
 
-        if above_avg(current_time):
-            print(f"New time: {current_time} is above the average: {avg_time}")
-            next_reward += 2.0
-        else:
-            print(f"New time: {current_time} is below average penalizing....")
-            next_reward -= 2.0
-            
             print("Reward:", reward, "Dead:", dead, "Episode: ", episode)
 
         start_time = time.time()
@@ -264,17 +259,23 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             critic_losses.append(critic_loss)
 
         if episode % 5 == 0:
+            if new_best(current_time): # we know that there is a new best so record what led up to it
+                next_reward += 5.0
+                print("New best time:", best_time, "New amt:", next_reward)
+            else:
+                next_reward -= 2.0
+                print("Failed to reach new best! New amt:", next_reward)
+                    # Print a highly formatted list of the current reward and penalty
+
             for i in range(len(prev_times) - 1):
                 difference = abs(prev_times[i] - prev_times[i + 1])
                 if 0.5 <= difference <= 2:
                     next_reward -= 5.0
-                    print(f"Distances are between 0.5 and 2 New reward amt: {next_reward}")
+                    print("agent hit same object 3x in a row! New amt:", next_reward)
                     break
         
         if episode % 10 == 0:
-            # Print a highly formatted list of the current reward and penalty
             print(f"Episode: {episode}, Total reward: {sum(rewards)}, Total penalty: {len(rewards) - sum(rewards)}")
-            next_reward = (next_reward / (episode + 1))
 
     return actor_losses, critic_losses
 
@@ -324,7 +325,7 @@ def main():
             if mode_input.lower() == "training":
                 actor_model.train()  # Switch the actor model to training mode
                 critic_model.train()  # Switch the critic model to training mode
-                actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=1000)  # Continue training the model
+                actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=10000)  # Continue training the model
             else:
                 actor_model.eval()  # Switch the actor model to evaluation mode
                 critic_model.eval()  # Switch the critic model to evaluation mode
@@ -334,13 +335,13 @@ def main():
             # model = GeometryDashCNN()
             actor_model = Actor()
             critic_model = Critic()
-            actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=1000)
+            actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=10000)
     else:
         # Train a new model
         # model = GeometryDashCNN()
         actor_model = Actor()
         critic_model = Critic()
-        actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=1000)
+        actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=10000)
         
     plt.plot(actor_losses, label="Actor Loss")
     plt.plot(critic_losses, label="Critic Loss")
