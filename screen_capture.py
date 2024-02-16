@@ -6,7 +6,7 @@ import sys # For debug info
 
 # Load the template image (avatar) and get its dimensions
 avatar_template_unsized = cv2.imread('assets/player.png', 0)  # 0 for grayscale
-avatar_template = cv2.resize(avatar_template_unsized, (59, 58))
+avatar_template = cv2.resize(avatar_template_unsized, (191, 195))
 template_height, template_width = avatar_template.shape[:2]
 
 def capture_screen(saveImg=False, *, fileName=None):
@@ -103,12 +103,13 @@ def find_avatar(frame, saveImg=False, *, fileName=None):
         print(avatar_template.shape)  # Should be (height, width)
         exit()
     
-    # Define a threshold for detection
-    threshold =  0.3248961 # You may need to adjust this based on testing
-    print(np.max(res))
-    
-    # If the max correlation value is greater than the threshold, we found the avatar
+  # Define a threshold for detection
+    threshold = 0.291325126
+    print('Number:', np.max(res))
+
+    # If the max correlation value is greater than the threshold range, we found the avatar. Interval notation: (0.30908, 0.31081238)
     if np.max(res) > threshold:
+        print(np.max(res), f'> {threshold}')
         return True
     else:
         return False

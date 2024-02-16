@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 
 plt.figure()
 
-avg_time = 0.0
-best_time = 0.0
+avg_time = 5.0
+best_time = 8.0
 
 def get_initial_state():
     initial_frame = capture_screen()  # Capture the initial game screen
@@ -53,10 +53,8 @@ def play_step(action, reward, elapsed_time):
         # pyautogui.press('space')  # Simulate pressing the spacebar
         # simulate a left click
         pyautogui.click(button='left')
-        
-    # Wait a bit for the action to take effect in the game
-    time.sleep(0.05)
-    
+
+    time.sleep(0.1)  # Wait for a short duration to allow the game to update
     next_reward = reward
     
     # Capture the next state
@@ -81,7 +79,7 @@ def play_step(action, reward, elapsed_time):
         print(f"Died at {elapsed_time} Penalized: {penalty} points!")
     else:
         #Rationale: the further it progresses in the game, the larger the reward.
-        award = 0.2 * elapsed_time + (best_time / 1000) # Dynamically reward the agent for surviving.
+        award = 0.5 + (elapsed_time / 200) + (best_time / 1000) # Dynamically reward the agent for surviving.
         next_reward += award
         print(f"Survived for:, {elapsed_time} Rewarded: {award}")
         # Small reward for surviving this step
@@ -181,7 +179,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
     start_global_time = time.time()
     
     # set up the reply buffer
-    replay_buffer = PrioritizedReplayBuffer(capacity=10000)
+    replay_buffer = PrioritizedReplayBuffer(capacity=1000)
     
     for episode in range(episodes):
         # print("Episode:", episode, end="\n\r")
@@ -205,7 +203,7 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
         state = next_state
         current_time = 0.0
 
-        if new_best(current_time): # we know that there is a new best
+        if new_best(current_time) and above_avg(current_time): # we know that there is a new best
             replay_buffer.push(state, action, reward, next_state, dead)
         
         while not dead:
@@ -224,24 +222,22 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             rewards.append(reward)
             state = next_state
 
-            if new_best(current_time): # we know that there is a new best
-                replay_buffer.push(state, action, reward, next_state, dead)
-
-            if above_avg(current_time):
-                next_reward += 3.0
-                print("Above average time:", current_time, "New amt:", next_reward)
-            else:
-                next_reward -= 1.0
-                print("Below average time:", current_time, "New amt:", next_reward)
-
             print("Reward:", reward, "Dead:", dead, "Episode: ", episode)
+
+            if new_best(current_time) and above_avg(current_time): # we know that there is a new best
+                replay_buffer.push(state, action, reward, next_state, dead)
+                next_reward += 5.0
+                print(f"Agent's time: {current_time} beat avg time of: {avg_time}! Total amt: {next_reward}")
+            else:
+                next_reward -= 2.0
+                print(f'Agent is not improving! Total amt: {next_reward}')
 
         start_time = time.time()
         
         if len(prev_times) != 4:
             prev_times.append(current_time)
         else:
-            prev_times.pop(0)      # remove the first element
+            prev_times.pop(0) # remove the first element
             avg_time = sum(prev_times) / len(prev_times)
             prev_times.append(current_time)
             
@@ -259,19 +255,12 @@ def train_simple_rl(actor_model, critic_model, episodes, gamma=0.99):
             critic_losses.append(critic_loss)
 
         if episode % 5 == 0:
-            if new_best(current_time): # we know that there is a new best so record what led up to it
-                next_reward += 5.0
-                print("New best time:", best_time, "New amt:", next_reward)
-            else:
-                next_reward -= 2.0
-                print("Failed to reach new best! New amt:", next_reward)
-                    # Print a highly formatted list of the current reward and penalty
-
+            # Print a highly formatted list of the current reward and penalty\
             for i in range(len(prev_times) - 1):
                 difference = abs(prev_times[i] - prev_times[i + 1])
                 if 0.5 <= difference <= 2:
                     next_reward -= 5.0
-                    print("agent hit same object 3x in a row! New amt:", next_reward)
+                    print("agent hit same object 3x in a row! Total amt:", next_reward)
                     break
         
         if episode % 10 == 0:
@@ -325,7 +314,7 @@ def main():
             if mode_input.lower() == "training":
                 actor_model.train()  # Switch the actor model to training mode
                 critic_model.train()  # Switch the critic model to training mode
-                actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=10000)  # Continue training the model
+                actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=1000)  # Continue training the model
             else:
                 actor_model.eval()  # Switch the actor model to evaluation mode
                 critic_model.eval()  # Switch the critic model to evaluation mode
@@ -335,13 +324,13 @@ def main():
             # model = GeometryDashCNN()
             actor_model = Actor()
             critic_model = Critic()
-            actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=10000)
+            actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=1000)
     else:
         # Train a new model
         # model = GeometryDashCNN()
         actor_model = Actor()
         critic_model = Critic()
-        actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=10000)
+        actor_losses, critic_losses = train_simple_rl(actor_model, critic_model, episodes=1000)
         
     plt.plot(actor_losses, label="Actor Loss")
     plt.plot(critic_losses, label="Critic Loss")
